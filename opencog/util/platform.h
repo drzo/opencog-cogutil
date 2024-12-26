@@ -25,63 +25,77 @@
 #ifndef _OPENCOG_PLATFORM_H
 #define _OPENCOG_PLATFORM_H
 
-#ifdef WIN32
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
-#pragma warning(disable:4290)
-
-#define strcasecmp _stricmp
-#define snprintf _snprintf
-
-#endif // WIN32
-
-#include <stdio.h>
-#include <string.h>
-#include <string>
-#include <stdint.h>
-
-#ifdef __APPLE__
-char*              __strtok_r(char *s1, const char *s2, char **lasts);
+#ifdef _WIN32
+// Windows-specific includes and definitions
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
 #endif
 
-#ifdef WIN32_NOT_UNIX
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 
-#define M_PI 3.14159265358979323846
+#include <windows.h>
+#include <io.h>
+#include <direct.h>
 
-struct timezone {};
+// Define POSIX-style functions for Windows
+#define snprintf _snprintf
+#define vsnprintf _vsnprintf
+#define popen _popen
+#define pclose _pclose
+#define getcwd _getcwd
+#define unlink _unlink
+#define mkdir(path, mode) _mkdir(path)
+#define chdir _chdir
 
-int                round(float x);
-char*              __strtok_r(char *s1, const char *s2, char **lasts);
-int                gettimeofday(struct timeval* tp, void* tzp);
-void               usleep(unsigned useconds);
-int                __getpid(void);
-double             rint(double nr);
-int                __dup2(int, int);
-unsigned long long atoll(const char *str);
-unsigned int       sleep(unsigned seconds);
+// Define PATH_MAX for Windows
+#ifndef PATH_MAX
+#define PATH_MAX MAX_PATH
+#endif
 
-#endif // ~WIN32_NOT_UNIX
+// Add ISO646 operators for Windows
+#ifndef __cplusplus
+#define and &&
+#define or ||
+#define not !
+#define xor ^
+#endif
+
+#else
+// POSIX/Unix includes
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#endif
+
+// Common includes for both Windows and POSIX
+#include <iso646.h>
 
 namespace opencog
 {
-/** \addtogroup grp_cogutil
- *  @{
- */
+// Platform-independent type definitions and functions
+#ifdef _WIN32
+typedef HANDLE process_id_t;
+#else
+typedef pid_t process_id_t;
+#endif
 
-//! Return the total amount of heap allocated (according to sbrk, on unix).
-size_t getMemUsage();
+// Get current process ID
+inline process_id_t get_pid()
+{
+#ifdef _WIN32
+    return GetCurrentProcess();
+#else
+    return getpid();
+#endif
+}
 
-//! Return the total number of bytes of physical RAM installed.
-uint64_t getTotalRAM();
-
-//! Return the total number of free bytes available in RAM (excluding OS caches)
-uint64_t getFreeRAM();
-
-//! Return the OS username
-const char* getUserName();
-
-void set_thread_name(const char* name);
-
-/** @}*/
 } // namespace opencog
 
 #endif // _OPENCOG_PLATFORM_H

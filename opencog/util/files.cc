@@ -22,30 +22,35 @@
 
 #include <fstream>
 #include <iostream>
-
+#include <string>
+#include <vector>
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-
 #include <string.h>
 #include <stdlib.h>
 
 #include "files.h"
 #include "platform.h"
+#include "Logger.h"
 
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/filesystem.hpp>
 
-#ifdef WIN32_NOT_UNIX
+#ifdef WIN32
 #include <direct.h>
-#define  mkdir _mkdir
-#endif
-
+#include <windows.h>
+#include <shlwapi.h>
+#pragma comment(lib, "shlwapi.lib")
+#define mkdir _mkdir
+#define PATH_MAX MAX_PATH
+#else
 #include <unistd.h>
 #ifndef PATH_MAX
 #define PATH_MAX 1024
 #endif
-
+#endif
 
 #define USER_FLAG "$USER"
 
@@ -91,61 +96,81 @@ const std::vector<std::string> opencog::DEFAULT_MODULE_PATHS = paths;
 
 std::vector<std::string> opencog::get_module_paths()
 {
-	std::vector<std::string> results = opencog::DEFAULT_MODULE_PATHS;
-	if (const char* env_p = std::getenv("OPENCOG_MODULE_PATHS"))
-	{
-		std::vector<std::string> split_paths;
-		std::string paths(env_p);
-		boost::split(split_paths, paths, boost::is_any_of(":"));
-		results.insert(results.end(), split_paths.begin(), split_paths.end());
-	}
-	return results;
+    std::vector<std::string> results = opencog::DEFAULT_MODULE_PATHS;
+    if (const char* env_p = std::getenv("OPENCOG_MODULE_PATHS"))
+    {
+        std::vector<std::string> split_paths;
+        std::string paths(env_p);
+        boost::split(split_paths, paths, boost::is_any_of(":"));
+        results.insert(results.end(), split_paths.begin(), split_paths.end());
+    }
+    return results;
 }
 
 bool opencog::file_exists(const char* filename)
 {
+#ifdef WIN32
+    return PathFileExistsA(filename) == TRUE;
+#else
     std::fstream dumpFile(filename, std::ios::in);
     dumpFile.close();
-
     if (dumpFile.fail()) {
         dumpFile.clear(std::ios_base::failbit);
         return false;
     }
     return true;
+#endif
 }
 
 bool opencog::exists(const char *fname)
 {
+#ifdef WIN32
+    return PathFileExistsA(fname) == TRUE;
+#else
     FILE* f = fopen(fname, "rb");
     if (!f)
         return false;
     fclose(f);
     return true;
+#endif
 }
 
 void opencog::expand_path(std::string& path)
 {
+#ifdef WIN32
+    // Convert forward slashes to backslashes for Windows
+    std::replace(path.begin(), path.end(), '/', '\\');
+#endif
 
     size_t user_index = path.find(USER_FLAG, 0);
     if (user_index != std::string::npos) {
         const char* username = getUserName();
         path.replace(user_index, strlen(USER_FLAG), username);
     }
-
-    return;
 }
 
 bool opencog::create_directory(const char* directory)
 {
-
-#ifdef WIN32_NOT_CYGWIN
-    if (mkdir(directory) == 0 || errno == EEXIST) {
+#ifdef WIN32
+    std::string dir_path(directory);
+    std::replace(dir_path.begin(), dir_path.end(), '/', '\\');
+    
+    // Create all intermediate directories
+    for (size_t pos = 0; pos < dir_path.length(); pos++) {
+        if (dir_path[pos] == '\\') {
+            std::string subdir = dir_path.substr(0, pos);
+            if (!subdir.empty()) {
+                _mkdir(subdir.c_str());
+            }
+        }
+    }
+    return (_mkdir(dir_path.c_str()) == 0 || errno == EEXIST);
 #else
     if (mkdir(directory, S_IRWXU | S_IRWXG | S_IRWXO) == 0 || errno == EEXIST) {
-#endif
         return true;
     }
     return false;
+#endif
 }
 
 bool opencog::append_file_content(const char* filename, std::string &s)
@@ -182,7 +207,6 @@ bool opencog::load_text_file(const std::string &fname, std::string& dest)
 
     while (!feof(f))
         buf[bptr++] = getc(f);
-// fread(buf, 8000, 1+(fsize/8000), f);
     buf[bptr] = '\0';
 
     fclose(f);
@@ -196,19 +220,42 @@ bool opencog::load_text_file(const std::string &fname, std::string& dest)
 
 std::string opencog::get_exe_name()
 {
+#ifdef WIN32
+    static char buf[PATH_MAX];
+    GetModuleFileName(NULL, buf, PATH_MAX);
+    return std::string(buf);
+#else
     static char buf[PATH_MAX];
     int rslt = readlink("/proc/self/exe", buf, PATH_MAX);
 
-    if ( rslt < 0 || rslt >= PATH_MAX ) {
-        return NULL;
+    if (rslt < 0 || rslt >= PATH_MAX) {
+        return std::string();
     }
 
     buf[rslt] = '\0';
-        return std::string(buf);
+    return std::string(buf);
+#endif
 }
 
 std::string opencog::get_exe_dir()
 {
     std::string exeName = get_exe_name();
-    return exeName.substr(0, exeName.rfind("/")+1);
+#ifdef WIN32
+    size_t pos = exeName.find_last_of("\\/");
+#else
+    size_t pos = exeName.find_last_of('/');
+#endif
+    return (pos != std::string::npos) ? exeName.substr(0, pos + 1) : "";
+}
+
+// Add Windows-specific path normalization
+std::string opencog::normalize_path(const std::string& path)
+{
+#ifdef WIN32
+    std::string normalized = path;
+    std::replace(normalized.begin(), normalized.end(), '/', '\\');
+    return normalized;
+#else
+    return path;
+#endif
 }

@@ -25,6 +25,11 @@
 
 #include "platform.h"
 #include <stdlib.h>
+#include <cstdlib>
+#include <string>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 namespace opencog {
 
@@ -35,6 +40,68 @@ const char* getUserName() {
     if (username == NULL)
         username = "unknown_user";
     return username;
+}
+
+std::string get_exe_name()
+{
+#ifdef _MSC_VER
+    char path[MAX_PATH] = { 0 };
+    GetModuleFileNameA(NULL, path, MAX_PATH);
+    std::string s = path;
+    return s.substr(s.find_last_of("\\/") + 1);
+#else
+    char path[PATH_MAX];
+    ssize_t size = readlink("/proc/self/exe", path, PATH_MAX);
+    path[size] = '\0';
+    std::string s = path;
+    return s.substr(s.find_last_of('/') + 1);
+#endif
+}
+
+std::string get_exe_dir()
+{
+#ifdef _MSC_VER
+    char path[MAX_PATH] = { 0 };
+    GetModuleFileNameA(NULL, path, MAX_PATH);
+    std::string s = path;
+    return s.substr(0, s.find_last_of("\\/"));
+#else
+    char path[PATH_MAX];
+    ssize_t size = readlink("/proc/self/exe", path, PATH_MAX);
+    path[size] = '\0';
+    std::string s = path;
+    return s.substr(0, s.find_last_of('/'));
+#endif
+}
+
+std::string get_current_dir()
+{
+    char path[PATH_MAX];
+    getcwd(path, PATH_MAX);
+    return std::string(path);
+}
+
+bool create_directory(const std::string& dir)
+{
+    try {
+        return fs::create_directories(dir);
+    } catch (...) {
+        return false;
+    }
+}
+
+bool exists(const std::string& path)
+{
+    try {
+        return fs::exists(path);
+    } catch (...) {
+        return false;
+    }
+}
+
+void set_current_dir(const std::string& dir)
+{
+    chdir(dir.c_str());
 }
 
 } // ~namespace opencog
@@ -231,3 +298,64 @@ void opencog::set_thread_name(const char* name)
     prctl(PR_SET_NAME, name, 0, 0, 0);
 }
 #endif // __APPLE__
+
+#ifdef WIN32
+#include <direct.h>
+#else
+#include <unistd.h>
+#endif
+
+#include <cstdlib>
+#include <string>
+
+namespace opencog {
+
+std::string get_current_dir() {
+    char buffer[PATH_MAX];
+#ifdef WIN32
+    if (_getcwd(buffer, PATH_MAX) == nullptr)
+#else
+    if (getcwd(buffer, PATH_MAX) == nullptr)
+#endif
+        return "";
+    return std::string(buffer);
+}
+
+bool change_directory(const std::string& directory) {
+#ifdef WIN32
+    return _chdir(directory.c_str()) == 0;
+#else
+    return chdir(directory.c_str()) == 0;
+#endif
+}
+
+bool file_exists(const std::string& filename) {
+#ifdef WIN32
+    return _access(filename.c_str(), F_OK) == 0;
+#else
+    return access(filename.c_str(), F_OK) == 0;
+#endif
+}
+
+std::string get_environment_variable(const std::string& var_name) {
+#ifdef WIN32
+    char buffer[32767]; // Maximum size for Windows environment variables
+    DWORD result = GetEnvironmentVariableA(var_name.c_str(), buffer, sizeof(buffer));
+    if (result == 0 || result > sizeof(buffer))
+        return "";
+    return std::string(buffer);
+#else
+    const char* value = getenv(var_name.c_str());
+    return value ? std::string(value) : "";
+#endif
+}
+
+bool set_environment_variable(const std::string& var_name, const std::string& value) {
+#ifdef WIN32
+    return SetEnvironmentVariableA(var_name.c_str(), value.c_str()) != 0;
+#else
+    return setenv(var_name.c_str(), value.c_str(), 1) == 0;
+#endif
+}
+
+} // namespace opencog

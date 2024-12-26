@@ -1,0 +1,35 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "windows-msvc-custom",
+            "displayName": "Windows MSVC Custom Config",
+            "description": "Target Windows with MSVC compiler",
+            "generator": "Visual Studio 17 2022",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "binaryDir": "${sourceDir}/../../build/cogutil",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "BOOST_ROOT": "C:/local/boost_1_82_0",
+                "BOOST_INCLUDEDIR": "C:/local/boost_1_82_0",
+                "BOOST_LIBRARYDIR": "C:/local/boost_1_82_0/stage/lib",
+                "Boost_USE_STATIC_LIBS": "ON",
+                "Boost_USE_MULTITHREADED": "ON",
+                "Boost_USE_STATIC_RUNTIME": "OFF",
+                "Boost_NO_SYSTEM_PATHS": "ON",
+                "CMAKE_C_COMPILER": "cl.exe",
+                "CMAKE_CXX_COMPILER": "cl.exe"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "windows-msvc-release-custom",
+            "configurePreset": "windows-msvc-custom",
+            "configuration": "Release"
+        }
+    ]
+} 

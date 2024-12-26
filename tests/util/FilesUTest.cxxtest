@@ -1,0 +1,107 @@
+#include <cstdio>
+#include <cstdlib>
+#include <fstream>
+#include <opencog/util/files.h>
+#include <cxxtest/TestSuite.h>
+
+using namespace opencog;
+
+class FilesUTest : public CxxTest::TestSuite
+{
+public:
+    void setUp() {}
+    void tearDown() {}
+
+    void test_file_exists()
+    {
+        // Create a temporary test file
+        const char* test_file = "test_file.txt";
+        std::ofstream out(test_file);
+        out << "test content" << std::endl;
+        out.close();
+
+        // Test file existence
+        TS_ASSERT(file_exists(test_file));
+        TS_ASSERT(exists(test_file));
+
+        // Test non-existent file
+        TS_ASSERT(!file_exists("nonexistent.txt"));
+        TS_ASSERT(!exists("nonexistent.txt"));
+
+        // Cleanup
+        std::remove(test_file);
+    }
+
+    void test_create_directory()
+    {
+        // Test single directory creation
+        const char* test_dir = "test_dir";
+        TS_ASSERT(create_directory(test_dir));
+        TS_ASSERT(exists(test_dir));
+
+        // Test nested directory creation
+        const char* nested_dir = "test_dir/nested/path";
+#ifdef WIN32
+        const char* win_nested_dir = "test_dir\\nested\\path";
+        TS_ASSERT(create_directory(win_nested_dir));
+        TS_ASSERT(exists(win_nested_dir));
+#else
+        TS_ASSERT(create_directory(nested_dir));
+        TS_ASSERT(exists(nested_dir));
+#endif
+
+        // Cleanup
+#ifdef WIN32
+        _rmdir(win_nested_dir);
+        _rmdir("test_dir\\nested");
+        _rmdir(test_dir);
+#else
+        rmdir(nested_dir);
+        rmdir("test_dir/nested");
+        rmdir(test_dir);
+#endif
+    }
+
+    void test_path_normalization()
+    {
+        std::string mixed_path = "path/to/some/directory";
+        std::string normalized = normalize_path(mixed_path);
+
+#ifdef WIN32
+        TS_ASSERT_EQUALS(normalized, "path\\to\\some\\directory");
+#else
+        TS_ASSERT_EQUALS(normalized, "path/to/some/directory");
+#endif
+    }
+
+    void test_expand_path()
+    {
+        std::string path = "$USER/documents";
+        expand_path(path);
+        
+        // Verify that $USER has been replaced
+        TS_ASSERT(path.find("$USER") == std::string::npos);
+        
+#ifdef WIN32
+        // Verify Windows path separators
+        TS_ASSERT(path.find('/') == std::string::npos);
+        TS_ASSERT(path.find('\\') != std::string::npos);
+#endif
+    }
+
+    void test_get_exe_info()
+    {
+        std::string exe_name = get_exe_name();
+        TS_ASSERT(!exe_name.empty());
+
+        std::string exe_dir = get_exe_dir();
+        TS_ASSERT(!exe_dir.empty());
+
+#ifdef WIN32
+        // Verify Windows path format
+        TS_ASSERT(exe_dir.find('\\') != std::string::npos);
+#else
+        TS_ASSERT(exe_dir.find('/') != std::string::npos);
+#endif
+    }
+}; 

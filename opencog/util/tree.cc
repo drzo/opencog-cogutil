@@ -1,5 +1,6 @@
 #include "tree.h"
 #include <boost/spirit/include/classic_core.hpp>
+#include <algorithm>
 
 namespace {
 using namespace boost::spirit::classic;
@@ -54,7 +55,6 @@ struct TreeGrammar : public grammar<TreeGrammar>
             expr =
                 (beg[&begin_internal] >> +expr >> ch_p(')')[&end_internal]) |
                 term;
-            //expr=term | (term >> '(' >> +expr >> ')');
         }
         rule<ScannerT> expr, beg, term;
 
@@ -76,8 +76,8 @@ std::istream& operator>>(std::istream& in, opencog::tree<std::string>& t)
         // replaced by "yo man" (where a space is missing)
         // This assumes that there are no '(' and ')' in the quoted string.
         std::getline(in, tmp);
-        nparen += count(tmp.begin(), tmp.end(), '(')
-                 - count(tmp.begin(), tmp.end(), ')');
+        nparen += std::count(tmp.begin(), tmp.end(), '(')
+                 - std::count(tmp.begin(), tmp.end(), ')');
         str += tmp + ' ';
     } while (in.good() && nparen>0);
 
@@ -95,11 +95,11 @@ std::istream& operator>>(std::istream& in, opencog::tree<std::string>& t)
     // former fails to parse correctly for some reason unclear to me.
     int sz = str.length();
     int i=0, j = 0;
-    while (i<sz and (str[i] == ' ' or str[i] == '\t')) i++;
+    while (i<sz && (str[i] == ' ' || str[i] == '\t')) i++;
     while (i<sz) {
        int ix = i;
        // Skip all whitespace that precedes an open paren.
-       while (str[ix] == ' ' or str[ix] == '\t') ix++;
+       while (str[ix] == ' ' || str[ix] == '\t') ix++;
        if (str[ix] == '(') {
           i = ix;
 
@@ -111,7 +111,7 @@ std::istream& operator>>(std::istream& in, opencog::tree<std::string>& t)
           // to become "+(+)" which is incorrect. (Yes, some operators
           // can be zero-ary).
           ix++;
-          while (str[ix] == ' ' or str[ix] == '\t') ix++;
+          while (str[ix] == ' ' || str[ix] == '\t') ix++;
           if (str[ix] == ')') i = ++ix;
        }
        str[j] = str[i];
@@ -131,4 +131,4 @@ std::istream& operator>>(std::istream& in, opencog::tree<std::string>& t)
     return in;
 }
 
-} // ~namespace opencog
+} // ~namespace std

@@ -25,3 +25,12 @@ ADD_CXXTEST(comprehensionUTest)
 ADD_CXXTEST(CounterUTest)
 ADD_CXXTEST(rankingUTest)
 ADD_CXXTEST(zipfUTest)
+ADD_CXXTEST(FilesUTest)
+
+TARGET_LINK_LIBRARIES(LoggerUTest
+	cogutil
+)
+
+TARGET_LINK_LIBRARIES(FilesUTest
+	cogutil
+)

@@ -26,6 +26,19 @@
  */
 
 #include "misc.h"
+#include <cstdlib>
+#include <string>
+
+#ifdef WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <dbghelp.h>
+#pragma comment(lib, "dbghelp.lib")
+#else
+#include <cxxabi.h>
+#include <unistd.h>
+#endif
 
 using namespace opencog;
 
@@ -41,16 +54,25 @@ unsigned int opencog::bitcount(unsigned long n)
     return ((tmp + (tmp >> 3)) & 030707070707) % 63;
 }
 
-#ifndef CYGWIN
 std::string opencog::demangle(const std::string& mangled)
 {
+#ifdef WIN32
+    char demangled_name[1024];
+    if (UnDecorateSymbolName(mangled.c_str(), demangled_name, sizeof(demangled_name), 
+        UNDNAME_COMPLETE | UNDNAME_NO_ARGUMENTS | UNDNAME_NO_MS_KEYWORDS))
+    {
+        return std::string(demangled_name);
+    }
+    return mangled;
+#else
     int status = 0;
     char* demangled_name = abi::__cxa_demangle(mangled.c_str(), 0, 0, &status);
     if (status == 0 && demangled_name) {
         std::string s(demangled_name);
         free(demangled_name);  // avoid memleak
         return s;
-    } else return "";
-}
+    }
+    return mangled;
 #endif
+}
 
