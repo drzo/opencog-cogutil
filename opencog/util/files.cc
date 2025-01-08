@@ -37,6 +37,7 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/iterator/iterator_facade.hpp>
 
 #ifdef WIN32
 #include <direct.h>
@@ -45,6 +46,7 @@
 #pragma comment(lib, "shlwapi.lib")
 #define mkdir _mkdir
 #define PATH_MAX MAX_PATH
+#include <lmcons.h>
 #else
 #include <unistd.h>
 #ifndef PATH_MAX
@@ -53,6 +55,20 @@
 #endif
 
 #define USER_FLAG "$USER"
+
+namespace boost {
+namespace filesystem {
+namespace path_detail {
+    inline bool operator==(const path_iterator& lhs, const path_iterator& rhs) {
+        return lhs.equals(rhs);
+    }
+    
+    inline bool operator!=(const path_iterator& lhs, const path_iterator& rhs) {
+        return !lhs.equals(rhs);
+    }
+}
+}
+}
 
 /**
  * The file paths here have to be able to find both shared libraries
@@ -251,11 +267,16 @@ std::string opencog::get_exe_dir()
 // Add Windows-specific path normalization
 std::string opencog::normalize_path(const std::string& path)
 {
-#ifdef WIN32
     std::string normalized = path;
-    std::replace(normalized.begin(), normalized.end(), '/', '\\');
+    std::replace(normalized.begin(), normalized.end(), '\\', '/');
     return normalized;
-#else
-    return path;
-#endif
+}
+
+std::string getUserName()
+{
+    char username[UNLEN + 1];
+    DWORD username_len = UNLEN + 1;
+    if (GetUserNameA(username, &username_len))
+        return std::string(username);
+    return "";
 }

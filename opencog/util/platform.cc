@@ -28,6 +28,9 @@
 #include <cstdlib>
 #include <string>
 #include <filesystem>
+#include <windows.h>
+#include <direct.h>
+#include <io.h>
 
 namespace fs = std::filesystem;
 
@@ -76,9 +79,14 @@ std::string get_exe_dir()
 
 std::string get_current_dir()
 {
-    char path[PATH_MAX];
-    getcwd(path, PATH_MAX);
-    return std::string(path);
+    char buffer[PATH_MAX];
+#ifdef WIN32
+    if (_getcwd(buffer, PATH_MAX) == nullptr)
+#else
+    if (getcwd(buffer, PATH_MAX) == nullptr)
+#endif
+        return "";
+    return std::string(buffer);
 }
 
 bool create_directory(const std::string& dir)
@@ -102,6 +110,22 @@ bool exists(const std::string& path)
 void set_current_dir(const std::string& dir)
 {
     chdir(dir.c_str());
+}
+
+std::string getcwd()
+{
+    char* cwd = _getcwd(nullptr, 0);
+    if (cwd) {
+        std::string result(cwd);
+        free(cwd);
+        return result;
+    }
+    return "";
+}
+
+process_id_t getpid()
+{
+    return GetCurrentProcessId();
 }
 
 } // ~namespace opencog

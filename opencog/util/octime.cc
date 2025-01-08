@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string>
 #include <time.h>
+#include <windows.h>
 #ifdef WIN32_NOT_UNIX
 #include <winsock2.h>
 #else
@@ -44,6 +45,26 @@ namespace opencog {
 static timeval referenceTime;
 static bool referenceTimeInitialized = false;
 
+inline uint64_t filetime_to_unix_epoch(const FILETIME& ft)
+{
+    uint64_t tt = ft.dwHighDateTime;
+    tt <<= 32;
+    tt |= ft.dwLowDateTime;
+    tt -= 116444736000000000ULL;
+    return tt;
+}
+
+int gettimeofday(struct timeval* tp, void* tzp)
+{
+    FILETIME ft;
+    GetSystemTimeAsFileTime(&ft);
+    uint64_t tt = filetime_to_unix_epoch(ft);
+    tt /= 10;
+    tp->tv_sec = (long)(tt / 1000000UL);
+    tp->tv_usec = (long)(tt % 1000000UL);
+    return 0;
+}
+
 void init_reference_time()
 {
     gettimeofday(&referenceTime, NULL);
@@ -53,12 +74,12 @@ void init_reference_time()
 unsigned long get_elapsed_millis()
 {
     OC_ASSERT(referenceTimeInitialized,
-            "utils - refenceTimeInitialized should have been initialized.");
+            "utils - referenceTimeInitialized should have been initialized.");
     timeval currentTime;
     gettimeofday(&currentTime, NULL);
-    return (currentTime.tv_sec -referenceTime.tv_sec)*1000 + (currentTime.tv_usec - referenceTime.tv_usec) / 1000;
+    return (currentTime.tv_sec - referenceTime.tv_sec) * 1000 + 
+           (currentTime.tv_usec - referenceTime.tv_usec) / 1000;
 }
-
 
 };
 

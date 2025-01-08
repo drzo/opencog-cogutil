@@ -55,9 +55,10 @@ unsigned int lazy_selector::count_n_free() const
                     boost::bind(&lazy_selector::is_free, this, boost::placeholders::_1));
 }
 
-void lazy_selector::reset_range(unsigned int new_u)
-{
-    _u = new_u;
+void lazy_selector::reset_range(unsigned int new_n) {
+    cassert(new_n > 0, "lazy_selector - n must be > 0.");
+    n = new_n;
+    _selected_indices.clear();
 }
 
 void lazy_selector::reset_range(unsigned int new_u, unsigned int new_l)
@@ -83,20 +84,11 @@ void lazy_selector::reset_range(unsigned int new_u, unsigned int new_l)
  */
 unsigned int lazy_selector::operator()()
 {
-    OC_ASSERT(!empty(), "lazy_selector - selector is empty.");
-
+    cassert(_selected_indices.size() < n, 
+            "lazy_selector - All elements have been selected.");
     unsigned int sel_idx = select();
-
-    // If the selected index points to nothing then the result is
-    // itself otherwise it is _l
-    unsigned int res = is_free(sel_idx) ? sel_idx : _l;
-
-    // Move _l from res so that it is now a free index
-    if(res == _l) increase_l_till_free();
-
-    _picked.insert(res);
-
-    return res;
+    _selected_indices.insert(sel_idx);
+    return sel_idx;
 }
 
 bool lazy_selector::is_free(unsigned int idx) const
@@ -109,6 +101,11 @@ void lazy_selector::increase_l_till_free()
     do {
         _l++;
     } while(!is_free(_l));
+}
+
+bool lazy_selector::is_still_free(unsigned int idx) const {
+    cassert(idx < n, "lazy_selector - Index greater than n.");
+    return _selected_indices.find(idx) == _selected_indices.end();
 }
 
 } //~namespace opencog

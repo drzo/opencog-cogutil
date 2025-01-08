@@ -27,64 +27,56 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+#include "Logger.h"
+
+#include <iostream>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
-#include <iostream>
-#include <sstream>
+#include <cstring>
 
-#include "Logger.h"
-#include "platform.h"
-
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)  // Disable deprecation warnings for fopen
+#ifdef _WIN32
+#include <io.h>
+#include <direct.h>
+#define getcwd _getcwd
+#define chdir _chdir
+#else
+#include <unistd.h>
+#include <sys/time.h>
 #endif
 
-using namespace opencog;
+namespace opencog {
 
-// Messages greater than this will be truncated
-#define MAX_PRINTF_STYLE_MESSAGE_SIZE (1024)
-
-const char* Logger::getLevelString(Level level)
+Logger::Logger(const std::string& fileName)
+    : fileName(fileName),
+      printToStdout(true),
+      timestampEnabled(true),
+      currentLevel(defaultLevel),
+      backTraceLevel(defaultBackTraceLevel),
+      f(nullptr)
 {
-    switch(level) {
-    case Level::NONE:  return "NONE";
-    case Level::ERROR: return "ERROR";
-    case Level::WARN:  return "WARN";
-    case Level::INFO:  return "INFO";
-    case Level::DEBUG: return "DEBUG";
-    case Level::FINE:  return "FINE";
-    default:          return "BAD LEVEL";
+    if (!fileName.empty()) {
+        f = fopen(fileName.c_str(), "a");
+        if (f == nullptr) {
+            fprintf(stderr, "[ERROR] Unable to open log file \"%s\"\n", fileName.c_str());
+            printToStdout = true;
+        }
     }
 }
 
-Logger::Logger(const std::string &fileName)
+Logger::~Logger()
 {
-    this->fileName.assign(fileName);
-    this->currentLevel = Level::INFO;
-    this->backTraceLevel = Level::ERROR;
-    this->timestampEnabled = true;
-    this->threadIdEnabled = true;
-    this->printToStdout = false;
-    this->printLevel = true;
-    this->syncEnabled = false;
+    if (f != nullptr) fclose(f);
 }
 
-Logger::~Logger() = default;
-
-void Logger::setFilename(const std::string& s)
+void Logger::setLevel(Level level) 
 {
-    fileName.assign(s);
+    currentLevel = level;
 }
 
-void Logger::setTimestampFlag(bool flag)
+void Logger::setBackTraceLevel(Level level)
 {
-    timestampEnabled = flag;
-}
-
-void Logger::setThreadIdFlag(bool flag)
-{
-    threadIdEnabled = flag;
+    backTraceLevel = level;
 }
 
 void Logger::setPrintToStdoutFlag(bool flag)
@@ -92,130 +84,138 @@ void Logger::setPrintToStdoutFlag(bool flag)
     printToStdout = flag;
 }
 
-void Logger::setPrintLevelFlag(bool flag)
+void Logger::setTimestampFlag(bool flag)
 {
-    printLevel = flag;
+    timestampEnabled = flag;
 }
 
-void Logger::setSyncEnabled(bool flag)
+void Logger::setFilename(const std::string& s)
 {
-    syncEnabled = flag;
+    if (f != nullptr) fclose(f);
+
+    fileName = s;
+    if (!fileName.empty()) {
+        f = fopen(fileName.c_str(), "a");
+        if (f == nullptr) {
+            fprintf(stderr, "[ERROR] Unable to open log file \"%s\"\n", fileName.c_str());
+            printToStdout = true;
+        }
+    }
 }
 
-void Logger::error(const char *fmt, ...)
+void Logger::log(Level level, const char *fmt, ...)
 {
-    va_list args; va_start(args, fmt);
-    logva(Level::ERROR, fmt, args);
-    va_end(args);
-}
-
-void Logger::warn(const char *fmt, ...)
-{
-    va_list args; va_start(args, fmt);
-    logva(Level::WARN, fmt, args);
-    va_end(args);
-}
-
-void Logger::info(const char *fmt, ...)
-{
-    va_list args; va_start(args, fmt);
-    logva(Level::INFO, fmt, args);
-    va_end(args);
-}
-
-void Logger::debug(const char *fmt, ...)
-{
-    va_list args; va_start(args, fmt);
-    logva(Level::DEBUG, fmt, args);
-    va_end(args);
-}
-
-void Logger::fine(const char *fmt, ...)
-{
-    va_list args; va_start(args, fmt);
-    logva(Level::FINE, fmt, args);
-    va_end(args);
+    va_list ap;
+    va_start(ap, fmt);
+    logva(level, fmt, ap);
+    va_end(ap);
 }
 
 void Logger::logva(Level level, const char *fmt, va_list args)
 {
     if (level > currentLevel) return;
 
-    char buffer[MAX_PRINTF_STYLE_MESSAGE_SIZE];
-#ifdef _MSC_VER
-    vsnprintf_s(buffer, sizeof(buffer), _TRUNCATE, fmt, args);
-#else
-    vsnprintf(buffer, sizeof(buffer), fmt, args);
-#endif
-    std::string msg = buffer;
-    log(level, msg);
-}
+    std::lock_guard<std::mutex> lock(logMutex);
 
-void Logger::log(Level level, const std::string &txt)
-{
-    if (level > currentLevel) return;
-
-    std::ostringstream oss;
+    char timestamp[64];
     if (timestampEnabled) {
-        time_t timestamp;
-        time(&timestamp);
-        char timestamp_buffer[64];
-#ifdef _MSC_VER
-        tm timeinfo;
-        localtime_s(&timeinfo, &timestamp);
-        strftime(timestamp_buffer, sizeof(timestamp_buffer),
-                "%Y-%m-%d %H:%M:%S", &timeinfo);
-#else
-        strftime(timestamp_buffer, sizeof(timestamp_buffer),
-                "%Y-%m-%d %H:%M:%S", localtime(&timestamp));
-#endif
-        oss << "[" << timestamp_buffer << "] ";
-    }
-
-    if (threadIdEnabled)
-        oss << "[Thread-" << std::this_thread::get_id() << "] ";
-
-    if (printLevel)
-        oss << "[" << getLevelString(level) << "] ";
-
-    oss << txt << std::endl;
-
-    if (syncEnabled) {
-        std::lock_guard<std::mutex> lock(this->lock);
-        write_msg(oss.str());
+        time_t t = time(nullptr);
+        struct tm *tm = localtime(&t);
+        strftime(timestamp, sizeof(timestamp), "[%Y-%m-%d %H:%M:%S] ", tm);
     } else {
-        write_msg(oss.str());
+        timestamp[0] = '\0';
     }
-}
 
-void Logger::write_msg(const std::string &msg)
-{
+    char prefix[16];
+    switch (level) {
+    case ERROR:   strcpy(prefix, "[ERROR] "); break;
+    case WARN:    strcpy(prefix, "[WARN] "); break;
+    case INFO:    strcpy(prefix, "[INFO] "); break;
+    case DEBUG:   strcpy(prefix, "[DEBUG] "); break;
+    case FINE:    strcpy(prefix, "[FINE] "); break;
+    default:      strcpy(prefix, "[NONE] "); break;
+    }
+
+    char buffer[16384];
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+
     if (printToStdout) {
-        std::cout << msg;
-        std::cout.flush();
+        printf("%s%s%s\n", timestamp, prefix, buffer);
+        fflush(stdout);
     }
 
-    if (!fileName.empty()) {
-#ifdef _MSC_VER
-        FILE* f = nullptr;
-        if (fopen_s(&f, fileName.c_str(), "a") == 0) {
-            if (f) {
-                fprintf_s(f, "%s", msg.c_str());
-                fclose(f);
-            }
-        }
-#else
-        std::FILE* f = fopen(fileName.c_str(), "a");
-        if (f) {
-            fprintf(f, "%s", msg.c_str());
-            fclose(f);
-        }
-#endif
+    if (f) {
+        fprintf(f, "%s%s%s\n", timestamp, prefix, buffer);
+        fflush(f);
     }
 }
 
-void Logger::flush()
+void Logger::error(const char *fmt, ...)
 {
-    if (printToStdout)
-        std::cout.flush();
+    va_list ap;
+    va_start(ap, fmt);
+    logva(ERROR, fmt, ap);
+    va_end(ap);
 }
+
+void Logger::warn(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    logva(WARN, fmt, ap);
+    va_end(ap);
+}
+
+void Logger::info(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    logva(INFO, fmt, ap);
+    va_end(ap);
+}
+
+void Logger::debug(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    logva(DEBUG, fmt, ap);
+    va_end(ap);
+}
+
+void Logger::fine(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    logva(FINE, fmt, ap);
+    va_end(ap);
+}
+
+Logger& Logger::getLogger()
+{
+    static Logger instance;
+    return instance;
+}
+
+const char* Logger::getLevelString(const Level level)
+{
+    static const char* levelStrings[] = {
+        "NONE",  "ERROR", "WARN", "INFO", "DEBUG", "FINE", "BAD_LEVEL"
+    };
+    return levelStrings[level];
+}
+
+Logger::Level Logger::getLevelFromString(const std::string& levelStr)
+{
+    if (levelStr == "NONE") return NONE;
+    if (levelStr == "ERROR") return ERROR;
+    if (levelStr == "WARN") return WARN;
+    if (levelStr == "INFO") return INFO;
+    if (levelStr == "DEBUG") return DEBUG;
+    if (levelStr == "FINE") return FINE;
+    return BAD_LEVEL;
+}
+
+void Logger::enableTimestamp() { timestampEnabled = true; }
+void Logger::disableTimestamp() { timestampEnabled = false; }
+
+} // namespace opencog

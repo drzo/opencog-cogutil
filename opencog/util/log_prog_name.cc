@@ -22,6 +22,7 @@
 
 #include "log_prog_name.h"
 #include "oc_assert.h"
+#include <functional>
 
 namespace opencog {
 
@@ -79,6 +80,12 @@ string determine_log_name(const string& log_file_prefix,
     replace(log_file.begin(), log_file.end(), '/', 'd');
     OC_ASSERT(log_file.size() <= max_filename_size);
     return log_file;
+}
+
+void set_prog_name(const char* prog_name)
+{
+    cassert(prog_name != nullptr, "prog_name must not be null");
+    _prog_name = prog_name;
 }
 
 } // ~namespace opencog

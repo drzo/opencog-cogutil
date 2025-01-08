@@ -25,77 +25,36 @@
 #ifndef _OPENCOG_PLATFORM_H
 #define _OPENCOG_PLATFORM_H
 
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-
-#ifdef _WIN32
-// Windows-specific includes and definitions
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-
+#ifdef WIN32
 #include <windows.h>
-#include <io.h>
+#include <process.h>
 #include <direct.h>
-
-// Define POSIX-style functions for Windows
-#define snprintf _snprintf
-#define vsnprintf _vsnprintf
-#define popen _popen
-#define pclose _pclose
+#include <io.h>
+typedef int pid_t;
+#define getpid _getpid
 #define getcwd _getcwd
-#define unlink _unlink
-#define mkdir(path, mode) _mkdir(path)
 #define chdir _chdir
-
-// Define PATH_MAX for Windows
-#ifndef PATH_MAX
-#define PATH_MAX MAX_PATH
-#endif
-
-// Add ISO646 operators for Windows
-#ifndef __cplusplus
-#define and &&
-#define or ||
-#define not !
-#define xor ^
-#endif
-
+#define access _access
+#define F_OK 0
 #else
-// POSIX/Unix includes
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/time.h>
 #endif
 
-// Common includes for both Windows and POSIX
-#include <iso646.h>
+#include <string>
 
 namespace opencog
 {
-// Platform-independent type definitions and functions
-#ifdef _WIN32
-typedef HANDLE process_id_t;
-#else
-typedef pid_t process_id_t;
-#endif
+    typedef pid_t process_id_t;
 
-// Get current process ID
-inline process_id_t get_pid()
-{
-#ifdef _WIN32
-    return GetCurrentProcess();
+    inline process_id_t get_pid()
+    {
+#ifdef WIN32
+        return _getpid();
 #else
-    return getpid();
+        return ::getpid();
 #endif
+    }
 }
-
-} // namespace opencog
 
 #endif // _OPENCOG_PLATFORM_H

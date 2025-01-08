@@ -25,6 +25,7 @@
 #include "StringTokenizer.h"
 
 #include <cstring>
+#include <functional>
 
 #include <opencog/util/exceptions.h>
 #include <opencog/util/oc_assert.h>
@@ -138,5 +139,25 @@ std::vector<std::string> AltStringTokenizer::without_empty() const
             ret.push_back((*this)[i]);
 
     return ret;
+}
+
+void StringTokenizer::tokenize(const std::string& str, const std::string& delimiter)
+{
+    cassert(!str.empty(), "StringTokenizer - Input string must not be empty");
+    cassert(!delimiter.empty(), "StringTokenizer - Delimiter must not be empty");
+
+    // Skip delimiters at beginning.
+    std::string::size_type lastPos = str.find_first_not_of(delimiter, 0);
+    // Find first "non-delimiter".
+    std::string::size_type pos = str.find_first_of(delimiter, lastPos);
+
+    while (std::string::npos != pos || std::string::npos != lastPos) {
+        // Found a token, add it to the vector.
+        tokens.push_back(str.substr(lastPos, pos - lastPos));
+        // Skip delimiters.  Note the "not_of"
+        lastPos = str.find_first_not_of(delimiter, pos);
+        // Find next "non-delimiter"
+        pos = str.find_first_of(delimiter, lastPos);
+    }
 }
 

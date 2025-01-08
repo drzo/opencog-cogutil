@@ -20,27 +20,64 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.12)
 
 PROJECT(cogutil)
 
-# Uncomment to be in Release mode [default].
-# SET(CMAKE_BUILD_TYPE Release)
+# Policy settings
+CMAKE_POLICY(SET CMP0144 NEW)
+CMAKE_POLICY(SET CMP0167 NEW)
 
-# Uncomment to build in debug mode.
-# SET(CMAKE_BUILD_TYPE Debug)
+# Build type
+if(CMAKE_BUILD_TYPE STREQUAL "")
+	message(STATUS "CMAKE_BUILD_TYPE not set, defaulting to Release")
+	set(CMAKE_BUILD_TYPE "Release")
+endif()
 
-# Uncomment to be in coverage testing mode.
-# SET(CMAKE_BUILD_TYPE Coverage)
+# Windows-specific settings
+if(WIN32)
+	add_definitions(-DWIN32)
+	add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+	add_definitions(-DBOOST_ALL_NO_LIB)
+	add_definitions(-DBOOST_ALL_DYN_LINK)
+endif()
 
-# Uncomment to build in profile mode.
-# SET(CMAKE_BUILD_TYPE Profile)
+# Boost configuration
+set(Boost_USE_STATIC_LIBS ON)
+set(Boost_USE_MULTITHREADED ON)
+set(Boost_USE_STATIC_RUNTIME ON)
+set(Boost_NO_SYSTEM_PATHS ON)
 
-# Uncomment to build in release mode with debug information.
-# SET(CMAKE_BUILD_TYPE RelWithDebInfo)
+find_package(Boost 1.82.0 REQUIRED COMPONENTS filesystem program_options system thread)
 
-# Default build type.
-IF (CMAKE_BUILD_TYPE STREQUAL "")
-	SET(CMAKE_BUILD_TYPE Release)
-ENDIF (CMAKE_BUILD_TYPE STREQUAL "")
+# Source files
+file(GLOB_RECURSE COGUTIL_SOURCES "src/*.cc" "src/*.cpp")
+file(GLOB_RECURSE COGUTIL_HEADERS "include/*.h" "include/*.hpp")
 
-MESSAGE(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+# Library target
+add_library(cogutil ${COGUTIL_SOURCES})
+target_include_directories(cogutil PUBLIC
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+	$<INSTALL_INTERFACE:include>
+	${Boost_INCLUDE_DIRS}
+)
+target_link_libraries(cogutil PUBLIC
+	${Boost_LIBRARIES}
+)
+
+# Installation
+install(TARGETS cogutil
+	EXPORT cogutil-targets
+	LIBRARY DESTINATION lib
+	ARCHIVE DESTINATION lib
+	RUNTIME DESTINATION bin
+	INCLUDES DESTINATION include
+)
+install(DIRECTORY include/
+	DESTINATION include
+	FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+)
+install(EXPORT cogutil-targets
+	FILE cogutil-targets.cmake
+	NAMESPACE cogutil::
+	DESTINATION lib/cmake/cogutil
+)
 
 ADD_DEFINITIONS(-DPROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
 	            -DPROJECT_BINARY_DIR="${CMAKE_BINARY_DIR}")
@@ -64,7 +101,7 @@ include(cmake/OpenCogGccOptions.cmake)
 
 # ------------------------------------------------------
 IF (WIN32) # Windows host but not cygwin
-	OPTION(WINDOWS_NATIVE "Build natively on Windows using MSVC" OFF)
+	OPTION(WINDOWS_NATIVE "Build natively on Windows using MSVC" ON)
 	IF (NOT WINDOWS_NATIVE)
 		MESSAGE(FATAL_ERROR "You must use Cygwin if compiling under Windows, or enable WINDOWS_NATIVE option.")
 	ENDIF()
@@ -72,19 +109,21 @@ IF (WIN32) # Windows host but not cygwin
 	IF (WINDOWS_NATIVE)
 		MESSAGE(STATUS "Building natively on Windows with MSVC")
 		ADD_DEFINITIONS(-DWIN32_LEAN_AND_MEAN)
+		ADD_DEFINITIONS(-DNOMINMAX)
 		ADD_DEFINITIONS(-D_CRT_SECURE_NO_WARNINGS)
 		ADD_DEFINITIONS(-D_SCL_SECURE_NO_WARNINGS)
+		ADD_DEFINITIONS(-D_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING)
 		SET(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+		
+		# Force static runtime for MSVC
+		set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+		
+		# Boost configuration for MSVC
+		set(Boost_USE_STATIC_RUNTIME ON)
+		set(Boost_USE_STATIC_LIBS ON)
+		set(Boost_USE_MULTITHREADED ON)
+		set(Boost_USE_DEBUG_RUNTIME OFF)
 	ENDIF()
-
-	# Previous definitions used for win32 (non cygwin) compilation.
-	# For reference only
-
-	# ADD_DEFINITIONS(-DWIN32_NOT_UNIX)
-	# FIND_PACKAGE(PThreads REQUIRED)
-	# FIND_PACKAGE(STLPort REQUIRED)
-	# INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/include/win32" ${PTHREADS_INCLUDE_DIR} ${STLPORT_INCLUDE_DIR})
-	# ADD_DEFINITIONS(-D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_DEPRECATE)
 ENDIF (WIN32)
 
 # Do the cygwin build

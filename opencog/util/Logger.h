@@ -29,14 +29,17 @@
 
 #include <cstdarg>
 #include <mutex>
-#include <sstream>
 #include <string>
-#include <thread>
+#include <functional>
+#include <iostream>
+#include <boost/thread/locks.hpp>
+#include <boost/thread/shared_mutex.hpp>
 
-#include "platform.h"
-
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)  // Disable deprecation warnings
+#ifdef _WIN32
+#include <io.h>
+#include <direct.h>
+#define getcwd _getcwd
+#define chdir _chdir
 #endif
 
 namespace opencog
@@ -45,75 +48,83 @@ namespace opencog
 class Logger
 {
 public:
-    enum LogLevel {
-        NONE = 0,    // No messages
-        ERROR = 1,   // Error messages
-        WARN = 2,    // Warning messages
-        INFO = 3,    // Information messages
-        DEBUG = 4,   // Debug messages
-        FINE = 5     // Fine debug messages
+    // Warning: if you change the levels don't forget to update
+    // levelStrings[] in Logger.cc
+    enum Level {
+        NONE,
+        ERROR,
+        WARN,
+        INFO,
+        DEBUG,
+        FINE,
+        BAD_LEVEL
     };
 
-    static const char* getLevelString(LogLevel level);
+    static const Level defaultLevel = Level::INFO;
+    static const Level defaultBackTraceLevel = Level::ERROR;
 
-private:
-    std::string fileName;
-    bool timestampEnabled;
-    bool threadIdEnabled;
-    bool printToStdout;
-    bool printLevel;
-    bool syncEnabled;
-    LogLevel currentLevel;
-    LogLevel previousLevel;
-    LogLevel backTraceLevel;
-    std::mutex logMutex;
+    /** Convert from string to enum */
+    static Level getLevelFromString(const std::string&);
 
-    void write_msg(const std::string &msg);
+    /** Convert from enum to string */
+    static const char* getLevelString(const Level);
 
-public:
-    explicit Logger(const std::string &fileName = "opencog.log");
-    virtual ~Logger();
+    static Logger& getLogger(void);
 
-    void setLevel(LogLevel level) { currentLevel = level; }
-    void setBackTraceLevel(LogLevel level) { backTraceLevel = level; }
-    void setPreviousLevel() { currentLevel = previousLevel; }
-    
-    LogLevel getLevel() const { return currentLevel; }
-    LogLevel getBackTraceLevel() const { return backTraceLevel; }
+    Logger(const std::string &fileName = "opencog.log");
+    Logger(const Logger&) = delete;
+    ~Logger();
 
-    void setTimestampFlag(bool flag) { timestampEnabled = flag; }
-    void setThreadIdFlag(bool flag) { threadIdEnabled = flag; }
-    void setPrintToStdoutFlag(bool flag) { printToStdout = flag; }
-    void setPrintLevelFlag(bool flag) { printLevel = flag; }
-    void setSyncFlag(bool flag) { syncEnabled = flag; }
+    Logger& operator=(const Logger&) = delete;
 
-    bool getTimestampFlag() const { return timestampEnabled; }
-    bool getThreadIdFlag() const { return threadIdEnabled; }
-    bool getPrintToStdoutFlag() const { return printToStdout; }
-    bool getPrintLevelFlag() const { return printLevel; }
-    bool getSyncFlag() const { return syncEnabled; }
+    // Set the level of messages that will be logged.
+    void setLevel(Level);
+    void setBackTraceLevel(Level);
+    void setPrintToStdoutFlag(bool);
+    void setTimestampFlag(bool);
+    void setFilename(const std::string&);
 
-    void error(const std::string &txt) { log(ERROR, txt); }
-    void warn(const std::string &txt) { log(WARN, txt); }
-    void info(const std::string &txt) { log(INFO, txt); }
-    void debug(const std::string &txt) { log(DEBUG, txt); }
-    void fine(const std::string &txt) { log(FINE, txt); }
+    // Get the current logging level
+    Level getLevel(void) const { return currentLevel; }
+    Level getBackTraceLevel(void) const { return backTraceLevel; }
+    bool getPrintToStdoutFlag(void) const { return printToStdout; }
+    bool getTimestampFlag(void) const { return timestampEnabled; }
+    const std::string& getFilename(void) const { return fileName; }
 
+    /**
+     * Log a message into log file (passed in constructor)
+     *
+     * @param level Level of the message
+     * @param fmt Format string
+     */
+    void log(Level level, const char *fmt, ...);
+    void logva(Level level, const char *fmt, va_list args);
     void error(const char *fmt, ...);
     void warn(const char *fmt, ...);
     void info(const char *fmt, ...);
     void debug(const char *fmt, ...);
     void fine(const char *fmt, ...);
 
-    void log(LogLevel level, const char *fmt, ...);
-    void logva(LogLevel level, const char *fmt, va_list args);
-    void log(LogLevel level, const std::string &txt);
+private:
+    std::string fileName;
+    bool printToStdout;
+    bool timestampEnabled;
+    Level currentLevel;
+    Level backTraceLevel;
+    Level previousLevel;
+    std::mutex logMutex;
+    FILE *f;
 
-    std::string getFileName() const { return fileName; }
+    /**
+     * Enable timestamp flag
+     */
+    void enableTimestamp();
+
+    /**
+     * Disable timestamp flag
+     */
+    void disableTimestamp();
 };
-
-// Global logger instance
-Logger& logger();
 
 } // namespace opencog
 

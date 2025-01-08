@@ -30,6 +30,7 @@
 #include <limits>
 #include <numeric>
 #include <vector>
+#include <functional>
 
 #include <boost/range/numeric.hpp>
 
@@ -90,22 +91,18 @@ inline unsigned int integer_log2(size_t v)
 ///   - next_power_of_two(1) = 1
 ///   - next_power_of_two(2) = 2
 ///   - next_power_of_two(3) = 4
-inline size_t next_power_of_two(size_t x)
+template<typename T>
+T next_power_of_two(T x)
 {
-    OC_ASSERT(x > 0);
-#ifdef __GNUC__
-    if (1==x) return 1;  // because __builtin_clzl(0) is -MAX_INT
-    return 1UL << (8*sizeof(size_t) - __builtin_clzl(x-1));
-#else
-    x--;
+    cassert(x > 0, "next_power_of_two - x must be > 0");
+    --x;
     x |= x >> 1;
     x |= x >> 2;
     x |= x >> 4;
     x |= x >> 8;
     x |= x >> 16;
-    x++;
+    ++x;
     return x;
-#endif
 }
 
 /// Return the number of bits needed to hold the value, aligned to
@@ -416,6 +413,12 @@ Float angular_distance(const Vec& a, const Vec& b, bool pos_n_neg = true)
     }
     else
         return 0;
+}
+
+template<typename FloatT> FloatT round(FloatT x)
+{
+    cassert(std::isfinite(x), "round - x must be finite");
+    return x < 0.0 ? std::ceil(x - 0.5) : std::floor(x + 0.5);
 }
 
 // Avoid spewing garbage into the namespace!

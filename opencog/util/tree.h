@@ -73,6 +73,7 @@
 #include <exception>
 #include <boost/lexical_cast.hpp>
 #include <boost/iterator/counting_iterator.hpp>
+#include <functional>
 
 #include <opencog/util/oc_assert.h>
 #include <opencog/util/exceptions.h>
@@ -929,7 +930,8 @@ template <class T, class tree_node_allocator>
 template <typename iter>
 iter tree<T, tree_node_allocator>::parent(iter position) const
 {
-    tree_assert(position.node!=0);
+    if (position.node->parent == nullptr)
+        return end();
     return iter(position.node->parent);
 }
 
@@ -1070,28 +1072,10 @@ template <class T, class tree_node_allocator>
 template <class iter>
 iter tree<T, tree_node_allocator>::append_child(iter position, const T& x)
 {
-    // If your program fails here you probably used 'append_child' to add the top
-    // node to an empty tree. From version 1.45 the top element should be added
-    // using 'insert'. See the documentation for further information, and sorry about
-    // the API change.
-    tree_assert(position.node!=head);
-    tree_assert(position.node);
-
-    tree_node* tmp = alloc_.allocate(1,0);
-    kp::constructor(&tmp->data, x);
-    tmp->first_child=0;
-    tmp->last_child=0;
-
-    tmp->parent=position.node;
-    if(position.node->last_child!=0) {
-        position.node->last_child->next_sibling=tmp;
-    }
-    else {
-        position.node->first_child=tmp;
-    }
-    tmp->prev_sibling=position.node->last_child;
-    position.node->last_child=tmp;
-    tmp->next_sibling=0;
+    tree_assert(position.node != nullptr);
+    tree_assert(position.node->data != nullptr);
+    sibling_iterator tmp = append_child(position);
+    *tmp = x;
     return tmp;
 }
 

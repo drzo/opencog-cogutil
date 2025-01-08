@@ -25,6 +25,7 @@
 
 #include <opencog/util/lazy_selector.h>
 #include <opencog/util/oc_assert.h>
+#include <functional>
 
 namespace opencog
 {
@@ -45,7 +46,11 @@ struct lazy_normal_selector : public lazy_selector {
         OC_ASSERT(s < n);
     }
 protected:
-    unsigned int select();
+    unsigned int select() override {
+        cassert(_selected_indices.size() < n,
+                "lazy_normal_selector - All elements have been selected.");
+        return _selected_indices.size();
+    }
 private:
     unsigned int _s;
 };

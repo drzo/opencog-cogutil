@@ -56,22 +56,13 @@ unsigned int opencog::bitcount(unsigned long n)
 
 std::string opencog::demangle(const std::string& mangled)
 {
-#ifdef WIN32
-    char demangled_name[1024];
-    if (UnDecorateSymbolName(mangled.c_str(), demangled_name, sizeof(demangled_name), 
-        UNDNAME_COMPLETE | UNDNAME_NO_ARGUMENTS | UNDNAME_NO_MS_KEYWORDS))
-    {
-        return std::string(demangled_name);
-    }
+#ifdef _MSC_VER
+    char undecorated_name[1024];
+    if (UnDecorateSymbolName(mangled.c_str(), undecorated_name,
+                            sizeof(undecorated_name), UNDNAME_COMPLETE))
+        return std::string(undecorated_name);
     return mangled;
 #else
-    int status = 0;
-    char* demangled_name = abi::__cxa_demangle(mangled.c_str(), 0, 0, &status);
-    if (status == 0 && demangled_name) {
-        std::string s(demangled_name);
-        free(demangled_name);  // avoid memleak
-        return s;
-    }
     return mangled;
 #endif
 }

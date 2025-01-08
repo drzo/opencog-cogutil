@@ -1,47 +1,49 @@
 #ifndef _OPENCOG_WINDOWS_H
 #define _OPENCOG_WINDOWS_H
 
-#ifdef _MSC_VER
+#ifdef WIN32
 
-// Define Windows-specific macros and includes
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
+#include <cstdint>
 #include <windows.h>
-#include <io.h>
-#include <direct.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <time.h>
 
-// POSIX compatibility
-#define F_OK 0
-#define PATH_MAX MAX_PATH
-#define getcwd _getcwd
-#define chdir _chdir
-#define mkdir(a, b) _mkdir(a)
-#define access _access
-#define snprintf _snprintf
-#define vsnprintf _vsnprintf
-#define strcasecmp _stricmp
-#define strncasecmp _strnicmp
+namespace opencog
+{
+    struct timeval {
+        int64_t tv_sec;       /* seconds */
+        int64_t tv_usec;      /* microseconds */
+    };
 
-// C++ alternative operators
-#ifndef __cplusplus
-#define and &&
-#define or ||
-#define not !
-#define xor ^
-#define and_eq &=
-#define or_eq |=
-#define not_eq !=
-#define xor_eq ^=
-#define bitand &
-#define bitor |
-#define compl ~
-#endif
+    struct timezone {
+        int tz_minuteswest;     /* minutes west of Greenwich */
+        int tz_dsttime;         /* type of DST correction */
+    };
 
-// Disable MSVC warnings
-#pragma warning(disable: 4290)  // throw specification ignored
-#pragma warning(disable: 4996)  // posix function deprecation warnings
-#pragma warning(disable: 4800)  // forcing value to bool
+    inline int gettimeofday(struct timeval* tv, struct timezone* tz)
+    {
+        if (tv != NULL)
+        {
+            FILETIME ft;
+            GetSystemTimeAsFileTime(&ft);
+            uint64_t tt = filetime_to_unix_epoch(ft);
+            tv->tv_sec = tt / 10000000;
+            tv->tv_usec = (tt % 10000000) / 10;
+        }
+        return 0;
+    }
 
-#endif // _MSC_VER
+    inline uint64_t filetime_to_unix_epoch(const FILETIME& ft)
+    {
+        uint64_t tt = ft.dwHighDateTime;
+        tt <<= 32;
+        tt |= ft.dwLowDateTime;
+        tt -= 116444736000000000ULL;
+        return tt;
+    }
+}
+
+#endif // WIN32
 
 #endif // _OPENCOG_WINDOWS_H 
